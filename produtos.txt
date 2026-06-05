@@ -1,0 +1,23 @@
+# Lista de produtos monitorados — TechPromos com Sobral
+# 
+# Instruções:
+#   - Uma URL por linha
+#   - Linhas começando com # são comentários (ignoradas)
+#   - Linhas em branco também são ignoradas
+#   - Suporte atual: Mercado Livre
+#
+# Exemplo:
+# https://www.mercadolivre.com.br/seu-produto-aqui/p/MLB...
+
+# === CONSOLES ===
+https://www.mercadolivre.com.br/headset-sem-fio-pulse-elite-sony-cor-branco/p/MLB35725883#polycard_client=recommendations_pdp-p2p&reco_backend=ranker_compl_marketplace&reco_model=rk_ctr_v1_retsys_comple_tpt&reco_client=pdp-p2p&reco_item_pos=1&reco_backend_type=low_level&reco_id=4bd5307f-9e19-4bc1-a967-269a4ee78104&wid=MLB6313115640&sid=recos
+
+# === MONITORES ===
+# https://www.mercadolivre.com.br/monitor-gamer.../p/MLB...
+
+# === PLACAS DE VIDEO ===
+# https://www.mercadolivre.com.br/rtx-4060.../p/MLB...
+
+# === PERIFÉRICOS ===
+# https://www.mercadolivre.com.br/teclado-mecanico.../p/MLB...
+http://mercadolivre.com.br/console-nintendo-switch-lite-32gb-azul-turquesa-standard-tela-55-cor-azul-turquesa/p/MLB40199765?pdp_filters=item_id:MLB5322766386#polycard_client=recommendations_pdp-pads-up&wid=MLB5322766386&sid=recos&reco_backend=recomm_platform_base_pads_rfa_MERGE&reco_model=search_recos_backend_merge&reco_client=pdp-pads-up&reco_item_pos=2&reco_backend_type=low_level&reco_id=628dfc38-af22-411a-8923-fe0866f8e3ff&is_advertising=true&ad_domain=PDPDESKTOP_UP&ad_position=3&ad_click_id=ZjFlMTg0OGQtYjZmMC00NWY0LTg0NjEtODdiOGFlZDdjYzAw
