@@ -35,13 +35,26 @@ def formatar_telegram(info: ProdutoInfo) -> str:
     if not info.sucesso:
         return f"❌ Erro ao buscar produto:\n{info.erro or 'Erro desconhecido'}"
 
-    preco_fmt = _formatar_preco(info.preco)
-    disponivel_txt = "" if info.disponivel else "\n⚠️ *Verifique disponibilidade*"
+    # Monta o bloco de preços
+    linhas_preco = []
+    
+    if info.preco_original and info.preco_original > (info.preco or 0):
+        linhas_preco.append(f"De: {_formatar_preco(info.preco_original)}")
+        linhas_preco.append(f"Por: {_formatar_preco(info.preco)} (Pix)")
+    else:
+        linhas_preco.append(f"Por: {_formatar_preco(info.preco)} (Pix)")
+        
+    if info.preco_parcelado and info.preco_parcelado != info.preco:
+        valor_parcelado = _formatar_preco(info.preco_parcelado).replace("R$ ", "")
+        linhas_preco.append(f"ou {valor_parcelado} (Parcelado)")
+
+    preco_final_txt = "\n".join(linhas_preco)
+    disponivel_txt = "" if info.disponivel else "\n\n⚠️ *Verifique disponibilidade*"
 
     return (
         f"🔥 {info.produto} 🔥\n"
         f"\n"
-        f"💸 {preco_fmt}"
+        f"💸 {preco_final_txt}"
         f"{disponivel_txt}\n"
         f"\n"
         f"🛒 {info.url}\n"

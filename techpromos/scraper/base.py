@@ -60,6 +60,8 @@ class ProdutoInfo:
 
     produto: Optional[str] = None
     preco: Optional[float] = None
+    preco_original: Optional[float] = None
+    preco_parcelado: Optional[float] = None
     url: Optional[str] = None
     consultado_em: str = field(
         default_factory=lambda: datetime.now().isoformat(timespec="seconds")
@@ -77,6 +79,8 @@ class ProdutoInfo:
         return {
             "produto": self.produto,
             "preco": self.preco,
+            "preco_original": self.preco_original,
+            "preco_parcelado": self.preco_parcelado,
             "url": self.url,
             "consultado_em": self.consultado_em,
             "marketplace": self.marketplace,

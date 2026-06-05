@@ -101,21 +101,22 @@ class MercadoLivreScraper(BaseScraper):
 
         # --- Tentativa 1: JSON-LD (schema.org) ---
         resultado = self._extrair_via_jsonld(soup, url)
-        if resultado is not None and resultado.sucesso:
-            logger.debug("[%s] Dados extraídos via JSON-LD.", self.marketplace)
-            return resultado
 
         # --- Tentativa 2: Seletores CSS ---
-        logger.debug("[%s] JSON-LD incompleto — tentando seletores CSS.", self.marketplace)
+        logger.debug("[%s] Executando extração via CSS.", self.marketplace)
         resultado_css = self._extrair_via_css(soup, url)
-
-        if resultado_css.sucesso:
-            logger.debug("[%s] Dados extraídos via seletores CSS.", self.marketplace)
-            return resultado_css
 
         # Combina o que cada método encontrou (ex: título do JSON-LD, preço não encontrado)
         produto = (resultado and resultado.produto) or resultado_css.produto
         preco = (resultado and resultado.preco) or resultado_css.preco
+        preco_original = resultado_css.preco_original
+        preco_parcelado = resultado_css.preco_parcelado
+        
+        disponivel = True
+        if resultado and not resultado.disponivel:
+            disponivel = False
+        if not resultado_css.disponivel:
+            disponivel = False
 
         if produto is None:
             logger.warning(
@@ -136,9 +137,11 @@ class MercadoLivreScraper(BaseScraper):
         return ProdutoInfo(
             produto=produto,
             preco=preco,
+            preco_original=preco_original,
+            preco_parcelado=preco_parcelado,
             url=url,
             marketplace=self.marketplace,
-            disponivel=preco is not None,
+            disponivel=disponivel,
             erro=erro,
         )
 
@@ -237,7 +240,7 @@ class MercadoLivreScraper(BaseScraper):
     ]
 
     def _extrair_via_css(self, soup: BeautifulSoup, url: str) -> ProdutoInfo:
-        """Extrai dados via seletores CSS como fallback ao JSON-LD.
+        """Extrai dados via seletores CSS como fallback ao JSON-LD e para preços extras.
 
         Args:
             soup: HTML parseado.
@@ -247,7 +250,12 @@ class MercadoLivreScraper(BaseScraper):
             ``ProdutoInfo`` com os campos encontrados (pode estar incompleto).
         """
         titulo = self._extrair_titulo_css(soup)
-        preco = self._extrair_preco_css(soup)
+        preco = self._extrair_preco_seletor(soup, ".ui-pdp-price__second-line")
+        if not preco:  # fallback
+            preco = self._extrair_preco_seletor(soup, "")
+            
+        preco_original = self._extrair_preco_seletor(soup, ".ui-pdp-price__original-value")
+        preco_parcelado = self._extrair_preco_seletor(soup, ".ui-pdp-price__subtitles")
         disponivel = not self._detectar_indisponivel(soup)
 
         erro = None
@@ -259,6 +267,8 @@ class MercadoLivreScraper(BaseScraper):
         return ProdutoInfo(
             produto=titulo,
             preco=preco,
+            preco_original=preco_original,
+            preco_parcelado=preco_parcelado,
             url=url,
             marketplace=self.marketplace,
             disponivel=disponivel,
@@ -276,13 +286,17 @@ class MercadoLivreScraper(BaseScraper):
                     return texto
         return None
 
-    def _extrair_preco_css(self, soup: BeautifulSoup) -> Optional[float]:
-        """Extrai o preço via seletores CSS (spans de fração + centavos)."""
-        fracao_tag: Optional[Tag] = soup.select_one(self._SEL_FRAÇÃO)
-        if fracao_tag is None:
+    def _extrair_preco_seletor(self, soup: BeautifulSoup, seletor_pai: str) -> Optional[float]:
+        """Extrai o preço via seletores CSS combinando um contêiner pai."""
+        container = soup.select_one(seletor_pai) if seletor_pai else soup
+        if not container:
             return None
 
-        centavos_tag: Optional[Tag] = soup.select_one(self._SEL_CENTAVOS)
+        fracao_tag = container.select_one(self._SEL_FRAÇÃO)
+        if not fracao_tag:
+            return None
+
+        centavos_tag = container.select_one(self._SEL_CENTAVOS)
         parte_inteira = self._limpar_numero(fracao_tag.get_text(strip=True))
         parte_centavos = (
             self._limpar_numero(centavos_tag.get_text(strip=True))
