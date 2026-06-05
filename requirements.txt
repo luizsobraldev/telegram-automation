@@ -3,6 +3,8 @@ requests==2.32.3
 beautifulsoup4==4.12.3
 lxml==5.3.0          # parser HTML mais rápido para BeautifulSoup
 urllib3==2.2.3       # já incluso no requests, listado para fixar versão
+fastapi>=0.111.0
+uvicorn>=0.30.0
 
 # Dependências de desenvolvimento e testes
 pytest==8.3.5

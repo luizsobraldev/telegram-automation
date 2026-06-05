@@ -110,3 +110,27 @@ Para alterar o nome do seu grupo do Telegram e o link na mensagem gerada, edite 
 TELEGRAM_GRUPO_NOME: str = "TECHPROMOS COM SOBRAL"
 TELEGRAM_GRUPO_LINK: str = "https://t.me/techpromos_sobral"
 ```
+
+---
+
+## ☁️ Integração com n8n (Railway / Cloud)
+
+Se o seu n8n estiver hospedado na nuvem (ex: Railway), ele não conseguirá executar o script local via "Execute Command". Por isso, o projeto agora é **também uma API RESTful**.
+
+### Passo 1: Fazer o Deploy da API
+Suba este projeto no Railway. Ele já possui o arquivo `Procfile` e o `app.py`, sendo reconhecido automaticamente.
+
+### Passo 2: Configurar no n8n
+Adicione um nó **HTTP Request** com a seguinte configuração:
+
+- **Method:** `POST`
+- **URL:** `https://sua-api.up.railway.app/monitorar` (substitua pela URL gerada no Railway)
+- **Body:** JSON
+- **Body Parameters:**
+```json
+{
+  "url": "https://www.mercadolivre.com.br/seu-produto"
+}
+```
+
+A API retornará os dados completos em JSON, prontos para uso nos nós seguintes (ex: Telegram ou IF).
