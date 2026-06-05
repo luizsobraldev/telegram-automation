@@ -1,38 +1,68 @@
-# TechPromos com Sobral
+# TechPromos com Luiz
 
 <div align="center">
 
-**Monitorador de preços em marketplaces com saída para Telegram e n8n**
+**API de coleta de preços em marketplaces para integração com n8n + Telegram**
 
 ![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python&logoColor=white)
-![Requests](https://img.shields.io/badge/Requests-2.32-green)
-![BeautifulSoup](https://img.shields.io/badge/BeautifulSoup4-4.12-orange)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111%2B-009688?logo=fastapi&logoColor=white)
+![Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet?logo=railway)
 
 </div>
 
 ---
 
-## 🎯 Sobre o Projeto
+## 🎯 O que é o TechPromos com Luiz?
 
-Ferramenta de linha de comando desenvolvida em Python para monitorar preços de produtos no **Mercado Livre**. 
+O **TechPromos com Luiz** é uma API REST desenvolvida em Python com FastAPI que coleta dados de produtos em marketplaces brasileiros.
 
-A ferramenta extrai o nome do produto e suas variações de preço (Preço original, Preço com desconto/Pix e Preço parcelado). Os dados são retornados em **JSON** (ideal para integração com o n8n) ou formatados como **mensagem pronta para copiar e colar em grupos do Telegram**.
+### Qual problema ele resolve?
+
+Automatiza o processo de monitoramento de preços. A API recebe a URL de um produto, faz a coleta dos dados (nome, preço à vista, preço original, preço parcelado, disponibilidade) e retorna tudo em JSON. O **n8n** cuida de toda a orquestração: define quais produtos monitorar, agenda as execuções e envia as ofertas para o canal do **Telegram**.
 
 ---
 
-## 🚀 Como Instalar
+## 🏗️ Arquitetura
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Fluxo de execução                       │
+│                                                             │
+│   n8n configura a URL do produto                            │
+│           ↓                                                 │
+│   n8n chama POST /monitorar                                 │
+│           ↓                                                 │
+│   API Python coleta os dados do marketplace                 │
+│           ↓                                                 │
+│   API retorna JSON com os dados do produto                  │
+│           ↓                                                 │
+│   n8n formata e envia para o canal do Telegram              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Componente | Responsabilidade |
+|---|---|
+| **Python / FastAPI** | Serviço de coleta e processamento dos dados do produto (web scraping) |
+| **n8n** | Orquestração: configura os produtos monitorados, agenda execuções, aplica regras e envia notificações |
+| **Telegram** | Canal de saída das ofertas para o usuário final |
+
+> **Importante:** As URLs dos produtos são configuradas exclusivamente no workflow do n8n. O Python atua como serviço de coleta de dados — ele não armazena, não agenda e não decide quais produtos monitorar. O n8n é responsável pela orquestração e configuração dos produtos.
+
+---
+
+## 🚀 Instalação (Desenvolvimento Local)
 
 ```bash
-# 1. Clone o repositório e entre na pasta
-git clone https://github.com/seu-usuario/techpromos-sobral.git
-cd techpromos-sobral
+# 1. Clone o repositório
+git clone https://github.com/seu-usuario/techpromos-luiz.git
+cd techpromos-luiz
 
 # 2. Crie e ative o ambiente virtual
 python -m venv .venv
 
-# Se estiver no Windows (PowerShell):
+# Windows (PowerShell):
 .venv\Scripts\Activate.ps1
-# Se estiver no Linux / macOS:
+# Linux / macOS:
 source .venv/bin/activate
 
 # 3. Instale as dependências
@@ -41,96 +71,156 @@ pip install -r requirements.txt
 
 ---
 
-## 📝 Como Adicionar Produtos
-
-Para cadastrar novos produtos para monitoramento em lote, abra o arquivo `produtos.txt` e adicione a URL completa do produto. **Use apenas uma URL por linha.**
-
-```text
-# produtos.txt
-
-# Você pode usar a tralha para fazer comentários
-https://www.mercadolivre.com.br/console-playstation5-slim.../p/MLB57081243
-https://www.mercadolivre.com.br/headset-sem-fio-pulse.../p/MLB35725883
-```
-
-> **Dica:** Abra o produto no navegador e copie o link direto da barra de endereços.
-
----
-
 ## ▶️ Como Usar
 
-### 1. Monitorar a lista completa (Formato Telegram)
-Lê o arquivo `produtos.txt` e gera as mensagens de todos os produtos cadastrados:
+### Iniciar a API localmente
+
 ```bash
-python monitorar.py
+uvicorn app:app --reload --port 8000
 ```
 
-**Exemplo de Saída (Telegram):**
+A documentação interativa (Swagger UI) fica disponível em: `http://localhost:8000/docs`
+
+### Testar a rota POST /monitorar
+
+**PowerShell:**
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/monitorar" `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"url": "https://www.mercadolivre.com.br/headset-sem-fio-pulse-elite-sony-cor-branco/p/MLB35725883"}'
 ```
-🔥 Headset Sem Fio Pulse Elite - Sony Cor Branco 🔥
 
-💸 De: R$ 999,90
-Por: R$ 743,91 (Pix)
-ou 799,90 (Parcelado)
+**curl (Linux / macOS / Git Bash):**
 
-🛒 https://www.mercadolivre.com.br/headset-sem-fio-pulse-elite...
-
-🤑 TECHPROMOS COM SOBRAL
-https://t.me/techpromos_sobral 🔥
-```
-
-### 2. Monitorar a lista completa (Formato JSON para automações)
-Para usar no n8n ou em outras APIs:
 ```bash
-python monitorar.py --formato json
+curl -X POST http://localhost:8000/monitorar \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.mercadolivre.com.br/headset-sem-fio-pulse-elite-sony-cor-branco/p/MLB35725883"}'
 ```
 
-### 3. Testar apenas um produto avulso
-Se quiser testar uma URL sem adicioná-la à lista:
-```bash
-python -m techpromos "URL_DO_PRODUTO" --formato telegram
+### Entrada esperada
+
+```json
+{
+  "url": "https://www.mercadolivre.com.br/headset-sem-fio-pulse-elite-sony-cor-branco/p/MLB35725883"
+}
+```
+
+### Saída esperada
+
+```json
+{
+  "produto": "Headset Sem Fio Pulse Elite - Sony Cor Branco",
+  "preco": 743.91,
+  "preco_original": 999.90,
+  "preco_parcelado": 799.90,
+  "url": "https://www.mercadolivre.com.br/...",
+  "consultado_em": "2026-06-05T10:30:00",
+  "marketplace": "Mercado Livre",
+  "disponivel": true,
+  "erro": null
+}
 ```
 
 ---
 
-## ⚙️ Tecnologias Utilizadas
+## 🔧 Rotas da API
 
-- **Python 3.12+**
-- **Requests:** Faz as requisições HTTP simulando o Googlebot para obter os dados completos do Mercado Livre.
-- **BeautifulSoup4 & lxml:** Parseia o HTML extraindo os seletores de preço ou a estrutura oculta JSON-LD (schema.org).
-- **Pytest:** Suíte de testes automatizados para garantir a estabilidade da raspagem.
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/monitorar` | Recebe a URL do produto e retorna os dados coletados em JSON |
+| `GET`  | `/`          | Confirma que a API está online |
+| `GET`  | `/health`    | Health check para Railway e balanceadores de carga |
+| `GET`  | `/docs`      | Documentação interativa (Swagger UI) |
 
 ---
 
-## 🔧 Personalização
+## ☁️ Deploy no Railway
 
-Para alterar o nome do seu grupo do Telegram e o link na mensagem gerada, edite as variáveis no topo do arquivo `techpromos/formatters.py`:
+O projeto está pronto para deploy no Railway. O `Procfile` já está configurado:
 
-```python
-TELEGRAM_GRUPO_NOME: str = "TECHPROMOS COM SOBRAL"
-TELEGRAM_GRUPO_LINK: str = "https://t.me/techpromos_sobral"
+```
+web: uvicorn app:app --host 0.0.0.0 --port $PORT
 ```
 
+### Passo a passo
+
+1. Conecte o repositório GitHub ao Railway.
+2. O Railway detecta automaticamente o `Procfile` e inicia a API.
+3. Copie a URL pública gerada (ex: `https://sua-api.up.railway.app`).
+4. Configure essa URL no workflow do n8n.
+
 ---
 
-## ☁️ Integração com n8n (Railway / Cloud)
+## 🔗 Integração com n8n
 
-Se o seu n8n estiver hospedado na nuvem (ex: Railway), ele não conseguirá executar o script local via "Execute Command". Por isso, o projeto agora é **também uma API RESTful**.
+No seu workflow do n8n, adicione um nó **HTTP Request** com a seguinte configuração:
 
-### Passo 1: Fazer o Deploy da API
-Suba este projeto no Railway. Ele já possui o arquivo `Procfile` e o `app.py`, sendo reconhecido automaticamente.
+| Campo | Valor |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `https://sua-api.up.railway.app/monitorar` |
+| **Body Content Type** | JSON |
 
-### Passo 2: Configurar no n8n
-Adicione um nó **HTTP Request** com a seguinte configuração:
+**Body:**
 
-- **Method:** `POST`
-- **URL:** `https://sua-api.up.railway.app/monitorar` (substitua pela URL gerada no Railway)
-- **Body:** JSON
-- **Body Parameters:**
 ```json
 {
   "url": "https://www.mercadolivre.com.br/seu-produto"
 }
 ```
 
-A API retornará os dados completos em JSON, prontos para uso nos nós seguintes (ex: Telegram ou IF).
+A API retorna os dados completos em JSON. Use os nós seguintes do n8n (ex: IF, Telegram) para processar o retorno e enviar as ofertas para o canal.
+
+Para adicionar novos produtos ao monitoramento, basta configurar as URLs diretamente no workflow do n8n.
+
+---
+
+## 🧪 Testes
+
+```bash
+# Rodar toda a suíte de testes
+python -m pytest tests/ -v
+
+# Com cobertura de código
+python -m pytest tests/ -v --cov=techpromos --cov-report=term-missing
+```
+
+---
+
+## ⚙️ Tecnologias
+
+| Tecnologia | Uso |
+|---|---|
+| **Python 3.12+** | Linguagem principal |
+| **FastAPI** | Framework da API REST |
+| **Requests** | Requisições HTTP com retry automático |
+| **BeautifulSoup4 + lxml** | Parse do HTML e extração de dados (JSON-LD + CSS) |
+| **Pytest** | Testes automatizados |
+| **n8n** | Orquestração de workflows (externo) |
+
+---
+
+## 📁 Estrutura do Projeto
+
+```
+├── app.py                     # API FastAPI — ponto de entrada da aplicação
+├── Procfile                   # Comando de inicialização para o Railway
+├── requirements.txt           # Dependências do projeto
+├── pyproject.toml             # Configuração do pytest e cobertura
+├── techpromos/
+│   ├── __init__.py            # Metadados do pacote
+│   ├── factory.py             # Fábrica de scrapers (seleção automática por domínio)
+│   ├── logger.py              # Configuração padronizada de logging
+│   └── scraper/
+│       ├── __init__.py        # Exports do módulo de scrapers
+│       ├── base.py            # Classe base abstrata + modelo ProdutoInfo
+│       └── mercadolivre.py    # Scraper do Mercado Livre
+└── tests/
+    ├── test_api.py            # Testes das rotas da API
+    ├── test_base.py           # Testes do modelo ProdutoInfo
+    ├── test_factory.py        # Testes da fábrica de scrapers
+    └── test_mercadolivre.py   # Testes do scraper do Mercado Livre
+```
