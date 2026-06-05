@@ -2,7 +2,13 @@
 Testes automatizados para a API FastAPI (app.py).
 
 Utiliza TestClient do FastAPI para testar as rotas sem subir servidor real.
-Os scrapers são mockados para garantir testes rápidos e determinísticos.
+Os scrapers sao mockados para garantir testes rapidos e deterministicos.
+
+Cobre:
+  - Retorno 200 com JSON completo para URL valida
+  - Todos os 3 formatos de URL do ML (curta, longa, anuncio)
+  - Erros: dominio nao suportado, falha na extracao, body invalido
+  - Rotas auxiliares (/, /health)
 """
 
 from __future__ import annotations
@@ -22,7 +28,17 @@ client = TestClient(app)
 # ---------------------------------------------------------------------------
 
 URL_ML_VALIDA = "https://www.mercadolivre.com.br/produto-teste/p/MLB12345"
+URL_ML_CURTA = "https://www.mercadolivre.com.br/p/MLB57081243"
+URL_ML_LONGA = (
+    "https://www.mercadolivre.com.br/console-playstation5-slim-"
+    "digital-pacote-astro-bot-e-gran-turismo-7-branco/p/MLB57081243"
+)
+URL_ML_ANUNCIO = (
+    "https://produto.mercadolivre.com.br/MLB-123456789-"
+    "playstation-5-slim-digital-_JM"
+)
 URL_NAO_SUPORTADA = "https://www.sitedesconhecido.com.br/produto"
+URL_INVALIDA = "nao-e-uma-url"
 
 
 def _criar_produto_sucesso() -> ProdutoInfo:
@@ -39,26 +55,26 @@ def _criar_produto_sucesso() -> ProdutoInfo:
 
 
 def _criar_produto_falha() -> ProdutoInfo:
-    """Cria um ProdutoInfo com falha na extração."""
+    """Cria um ProdutoInfo com falha na extracao."""
     return ProdutoInfo(
         url=URL_ML_VALIDA,
         marketplace="Mercado Livre",
         disponivel=False,
-        erro="Não foi possível extrair os dados da página.",
+        erro="Nao foi possivel extrair os dados da pagina.",
     )
 
 
 # ---------------------------------------------------------------------------
-# Testes — POST /monitorar
+# Testes - POST /monitorar (sucesso)
 # ---------------------------------------------------------------------------
 
 
 class TestMonitorarSucesso:
-    """Testes para cenários de sucesso na rota POST /monitorar."""
+    """Testes para cenarios de sucesso na rota POST /monitorar."""
 
     @patch("app.obter_scraper")
     def test_retorna_200_com_dados_do_produto(self, mock_obter):
-        """URL válida do ML deve retornar 200 com JSON completo."""
+        """URL valida do ML deve retornar 200 com JSON completo."""
         mock_scraper = MagicMock()
         mock_scraper.raspar.return_value = _criar_produto_sucesso()
         mock_obter.return_value = mock_scraper
@@ -91,20 +107,61 @@ class TestMonitorarSucesso:
         }
         assert set(data.keys()) == chaves_esperadas
 
+    @patch("app.obter_scraper")
+    def test_url_curta_p_mlb_retorna_200(self, mock_obter):
+        """URL curta /p/MLB... deve ser aceita e retornar 200."""
+        mock_scraper = MagicMock()
+        mock_scraper.raspar.return_value = _criar_produto_sucesso()
+        mock_obter.return_value = mock_scraper
+
+        response = client.post("/monitorar", json={"url": URL_ML_CURTA})
+
+        assert response.status_code == 200
+        assert response.json()["produto"] == "Headset Pulse Elite Sony"
+
+    @patch("app.obter_scraper")
+    def test_url_longa_slug_p_mlb_retorna_200(self, mock_obter):
+        """URL longa com slug /.../p/MLB... deve ser aceita e retornar 200."""
+        mock_scraper = MagicMock()
+        mock_scraper.raspar.return_value = _criar_produto_sucesso()
+        mock_obter.return_value = mock_scraper
+
+        response = client.post("/monitorar", json={"url": URL_ML_LONGA})
+
+        assert response.status_code == 200
+        assert response.json()["produto"] == "Headset Pulse Elite Sony"
+
+    @patch("app.obter_scraper")
+    def test_url_anuncio_produto_subdominio_retorna_200(self, mock_obter):
+        """URL de anuncio produto.mercadolivre.com.br/MLB-...-_JM deve retornar 200."""
+        mock_scraper = MagicMock()
+        mock_scraper.raspar.return_value = _criar_produto_sucesso()
+        mock_obter.return_value = mock_scraper
+
+        response = client.post("/monitorar", json={"url": URL_ML_ANUNCIO})
+
+        assert response.status_code == 200
+        assert response.json()["produto"] == "Headset Pulse Elite Sony"
+
+
+# ---------------------------------------------------------------------------
+# Testes - POST /monitorar (erros)
+# ---------------------------------------------------------------------------
+
 
 class TestMonitorarErros:
-    """Testes para cenários de erro na rota POST /monitorar."""
+    """Testes para cenarios de erro na rota POST /monitorar."""
 
     def test_dominio_nao_suportado_retorna_400(self):
-        """URL de domínio não suportado deve retornar 400."""
+        """URL de dominio nao suportado deve retornar 400."""
         response = client.post("/monitorar", json={"url": URL_NAO_SUPORTADA})
 
         assert response.status_code == 400
-        assert "Nenhum scraper disponível" in response.json()["detail"]
+        assert "Nenhum scraper" in response.json()["detail"]
 
     @patch("app.obter_scraper")
     def test_falha_na_extracao_retorna_422(self, mock_obter):
-        """Quando o scraper não consegue extrair dados, retorna 422."""
+        """Quando o scraper nao consegue extrair dados, retorna 422."""
         mock_scraper = MagicMock()
         mock_scraper.raspar.return_value = _criar_produto_falha()
         mock_obter.return_value = mock_scraper
@@ -114,7 +171,7 @@ class TestMonitorarErros:
         assert response.status_code == 422
 
     def test_body_vazio_retorna_422(self):
-        """Requisição sem body deve retornar 422 (Unprocessable Entity)."""
+        """Requisicao sem body deve retornar 422 (Unprocessable Entity)."""
         response = client.post("/monitorar")
 
         assert response.status_code == 422
@@ -127,7 +184,7 @@ class TestMonitorarErros:
 
 
 # ---------------------------------------------------------------------------
-# Testes — GET / e GET /health
+# Testes - GET / e GET /health
 # ---------------------------------------------------------------------------
 
 

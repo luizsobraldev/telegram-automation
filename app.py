@@ -73,28 +73,40 @@ def monitorar_produto(request: MonitorarRequest):
         disponivel, erro.
     """
     url = request.url
+    logger.info("POST /monitorar | URL recebida: %s", url)
 
-    # Obtém o scraper correspondente ao domínio da URL
+    # --- Etapa 1: Selecionar scraper ---
     try:
         scraper = obter_scraper(url)
+        logger.info(
+            "Scraper selecionado: %s para URL: %s",
+            scraper.__class__.__name__, url,
+        )
     except ValueError as e:
-        # Se nenhum scraper suporta o domínio, retorna erro 400
+        logger.warning("Dominio nao suportado | URL: %s | Erro: %s", url, e)
         raise HTTPException(
             status_code=400,
             detail=str(e),
         )
 
-    # Executa a raspagem
+    # --- Etapa 2: Executar raspagem ---
     logger.info("Iniciando raspagem para URL na API: %s", url)
     info = scraper.raspar(url)
 
     if not info.sucesso:
-        # Se falhou em extrair dados, retorna erro 422
+        logger.warning(
+            "Falha na extracao | URL: %s | Erro: %s",
+            url, info.erro,
+        )
         raise HTTPException(
             status_code=422,
             detail=info.erro or "Falha ao extrair os dados do produto.",
         )
 
+    logger.info(
+        "Raspagem concluida com sucesso | Produto: %s | Preco: %s | URL: %s",
+        info.produto, info.preco, url,
+    )
     return info.to_dict()
 
 

@@ -7,10 +7,15 @@ Estratégia de extração:
     (Googlebot), que faz o servidor retornar o HTML pré-renderizado com
     dados estruturados em JSON-LD (schema.org).
 
-    Ordem de tentativa:
+    Ordem de tentativa para título:
         1. JSON-LD (schema.org/Product ou schema.org/Offer) — mais confiável.
         2. Seletores CSS de fallback (.ui-pdp-title, .andes-money-amount__fraction).
         3. Metatag og:title + <title> para o nome (último recurso).
+
+    Resiliência:
+        - Parser HTML com fallback automático (lxml → html.parser).
+        - Título extraído por 3 métodos independentes antes de reportar erro.
+        - Mensagem de erro detalhada para diagnóstico em produção.
 """
 
 from __future__ import annotations
@@ -20,11 +25,14 @@ import logging
 import re
 from typing import Optional
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, FeatureNotFound, Tag
 
 from techpromos.scraper.base import BaseScraper, ProdutoInfo
 
 logger = logging.getLogger(__name__)
+
+# Parsers em ordem de preferência (lxml é mais rápido, html.parser é built-in)
+_PARSERS = ["lxml", "html.parser"]
 
 # User-Agent que faz o ML servir HTML pré-renderizado com JSON-LD
 _UA_CRAWLER = (
@@ -78,8 +86,12 @@ class MercadoLivreScraper(BaseScraper):
         Returns:
             HTML como string UTF-8.
         """
-        logger.debug("[%s] GET %s", self.marketplace, url)
+        logger.info("[%s] GET %s", self.marketplace, url)
         resposta = self.session.get(url, timeout=self.timeout)
+        logger.info(
+            "[%s] HTTP %d | URL final: %s | %d bytes",
+            self.marketplace, resposta.status_code, resposta.url, len(resposta.content),
+        )
         resposta.raise_for_status()
         resposta.encoding = "utf-8"
         return resposta.text
@@ -97,7 +109,7 @@ class MercadoLivreScraper(BaseScraper):
         Returns:
             ``ProdutoInfo`` preenchido com os dados encontrados.
         """
-        soup = BeautifulSoup(html, "lxml")
+        soup = self._parse_html(html)
 
         # --- Tentativa 1: JSON-LD (schema.org) ---
         resultado = self._extrair_via_jsonld(soup, url)
@@ -118,18 +130,24 @@ class MercadoLivreScraper(BaseScraper):
         if not resultado_css.disponivel:
             disponivel = False
 
+        # --- Tentativa 3: Metatags (og:title, <title>) como último recurso ---
+        if produto is None:
+            produto = self._extrair_titulo_metatag(soup)
+
         if produto is None:
             logger.warning(
-                "[%s] Título não encontrado. Verifique se a URL é de um produto válido.",
-                self.marketplace,
+                "[%s] Título não encontrado por nenhum método "
+                "(JSON-LD, CSS, metatag). HTML length=%d | URL: %s",
+                self.marketplace, len(html), url,
             )
             return ProdutoInfo(
                 url=url,
                 marketplace=self.marketplace,
                 disponivel=False,
                 erro=(
-                    "Produto não encontrado. Certifique-se de que a URL é de uma "
-                    "página de produto do Mercado Livre (ex: /p/MLB... ou /MLB...)."
+                    "Não foi possível extrair os dados do produto. "
+                    "O Mercado Livre pode ter bloqueado a requisição "
+                    "ou alterado a estrutura da página."
                 ),
             )
 
@@ -315,6 +333,73 @@ class MercadoLivreScraper(BaseScraper):
             if soup.select_one(seletor):
                 return True
         return False
+
+    # ------------------------------------------------------------------
+    # Extração via metatags (último recurso)
+    # ------------------------------------------------------------------
+
+    def _extrair_titulo_metatag(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extrai o título via og:title ou <title> como último recurso.
+
+        Útil quando o ML serve uma página com layout diferente (ex: IPs de
+        datacenter) que não contém os seletores CSS padrão nem JSON-LD.
+
+        Args:
+            soup: HTML parseado.
+
+        Returns:
+            Título do produto, ou None se não encontrado.
+        """
+        # og:title
+        og = soup.find("meta", property="og:title")
+        if og:
+            conteudo = og.get("content", "").strip()
+            if conteudo:
+                # Remove sufixos como " | Mercado Livre" ou " - R$ ..."
+                titulo = re.split(r"\s*[|]\s*", conteudo)[0].strip()
+                titulo = re.sub(r"\s*-\s*R\$\s*[\d.,]+\s*$", "", titulo).strip()
+                if titulo:
+                    logger.info("[%s] Titulo extraido via og:title: '%s'", self.marketplace, titulo)
+                    return titulo
+
+        # <title>
+        title_tag = soup.find("title")
+        if title_tag:
+            texto = title_tag.get_text(strip=True)
+            if texto:
+                titulo = re.split(r"\s*[|]\s*", texto)[0].strip()
+                titulo = re.sub(r"\s*-\s*R\$\s*[\d.,]+\s*$", "", titulo).strip()
+                if titulo:
+                    logger.info("[%s] Titulo extraido via <title>: '%s'", self.marketplace, titulo)
+                    return titulo
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Parser HTML resiliente
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_html(html: str) -> BeautifulSoup:
+        """Parseia o HTML usando o melhor parser disponível.
+
+        Tenta ``lxml`` primeiro (mais rápido), e cai para ``html.parser``
+        (built-in do Python) se ``lxml`` não estiver instalado.
+
+        Args:
+            html: Conteúdo HTML como string.
+
+        Returns:
+            Objeto ``BeautifulSoup`` parseado.
+        """
+        for parser in _PARSERS:
+            try:
+                return BeautifulSoup(html, parser)
+            except FeatureNotFound:
+                logger.warning("Parser '%s' nao disponivel, tentando proximo.", parser)
+                continue
+        # Fallback absoluto
+        return BeautifulSoup(html, "html.parser")
 
     @staticmethod
     def _limpar_numero(texto: str) -> str:
